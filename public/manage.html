@@ -33,6 +33,17 @@
     </div>
 
     <div class="panel">
+      <h2 data-i18n="copyHabits"></h2>
+      <div class="form-row">
+        <label><span data-i18n="copyFrom"></span> <select id="fromMonth"></select> <select id="fromYear"></select></label>
+        <span aria-hidden="true">&rarr;</span>
+        <label><span data-i18n="copyTo"></span> <select id="toMonth"></select> <select id="toYear"></select></label>
+        <button class="primary" id="copyGo" data-i18n="copyNow"></button>
+      </div>
+      <div id="copyMsg" class="msg"></div>
+    </div>
+
+    <div class="panel">
       <table>
         <thead><tr><th data-i18n="title"></th><th data-i18n="category"></th><th></th></tr></thead>
         <tbody id="habitRows"></tbody>
@@ -102,15 +113,60 @@
       } catch (err) { msg.className = 'msg error'; msg.textContent = err.message; }
     };
 
+    // ---- Copy habits from any month to any month ----
+    function fillMonthYear(prefix, v) {
+      const n = nowYM();
+      let mo = '';
+      I18N[currentLang].months.forEach((name, i) => {
+        mo += '<option value="' + (i + 1) + '"' + (i + 1 === v.month ? ' selected' : '') + '>' + name + '</option>';
+      });
+      let yo = '';
+      for (let y = Math.min(n.year - 5, v.year); y <= Math.max(n.year + 1, v.year); y++)
+        yo += '<option value="' + y + '"' + (y === v.year ? ' selected' : '') + '>' + y + '</option>';
+      document.getElementById(prefix + 'Month').innerHTML = mo;
+      document.getElementById(prefix + 'Year').innerHTML = yo;
+    }
+    // Default: previous month copied into the month being managed
+    function prefillCopy() {
+      fillMonthYear('from', prevYM(ym.year, ym.month));
+      fillMonthYear('to', ym);
+    }
+
+    document.getElementById('copyGo').onclick = async () => {
+      const from = { year: Number(document.getElementById('fromYear').value), month: Number(document.getElementById('fromMonth').value) };
+      const to = { year: Number(document.getElementById('toYear').value), month: Number(document.getElementById('toMonth').value) };
+      const el = document.getElementById('copyMsg');
+      if (from.year === to.year && from.month === to.month) {
+        el.className = 'msg error'; el.textContent = t('sameMonth'); return;
+      }
+      try {
+        const out = await api('POST', '/api/habits/copy', {
+          fromYear: from.year, fromMonth: from.month, toYear: to.year, toMonth: to.month });
+        el.className = 'msg ok';
+        el.textContent = out.found === 0 ? t('noSourceHabits')
+          : out.copied ? out.copied + ' ' + t('copied') : t('nothingToCopy');
+        if (to.year === ym.year && to.month === ym.month) {
+          loadHabits();
+        } else if (out.copied) {
+          el.innerHTML += ' <a href="#" id="goDest">' + t('viewMonth') + '</a>';
+          document.getElementById('goDest').onclick = (e) => { e.preventDefault(); go(to); };
+        }
+      } catch (err) {
+        el.className = 'msg error'; el.textContent = t('genericError');
+      }
+    };
+
     function go(newYm) {
       ym = newYm;
       history.replaceState(null, '', '?year=' + ym.year + '&month=' + ym.month);
       renderPickers(document.getElementById('pickers'), ym, go);
+      prefillCopy();
       loadHabits();
     }
 
     applyI18n();
     renderPickers(document.getElementById('pickers'), ym, go);
+    prefillCopy();
     loadCategories().then(loadHabits);
   </script>
 </body>

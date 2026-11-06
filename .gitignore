@@ -22,3 +22,7 @@ Thumbs.db
 # Build / coverage output
 dist/
 coverage/
+
+# Database backups
+backup*.sql
+*.dump

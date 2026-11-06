@@ -50,12 +50,13 @@ router.put('/:id/check', async (req, res) => {
 
 // POST /api/habits/copy  body: { fromYear, fromMonth, toYear, toMonth }
 router.post('/copy', async (req, res) => {
-  const { fromYear, fromMonth, toYear, toMonth } = req.body;
-  const out = await svc.copyMonth(
-    req.session.userId,
-    { year: Number(fromYear), month: Number(fromMonth) },
-    { year: Number(toYear), month: Number(toMonth) });
-  res.json(out);
+  const from = { year: Number(req.body.fromYear), month: Number(req.body.fromMonth) };
+  const to = { year: Number(req.body.toYear), month: Number(req.body.toMonth) };
+  const valid = [from, to].every(x => Number.isInteger(x.year) && Number.isInteger(x.month) &&
+    x.month >= 1 && x.month <= 12 && x.year >= 2000 && x.year <= 2100);
+  if (!valid) return res.status(400).json({ error: 'invalid_month' });
+  if (from.year === to.year && from.month === to.month) return res.status(400).json({ error: 'same_month' });
+  res.json(await svc.copyMonth(req.session.userId, from, to));
 });
 
 module.exports = router;

@@ -30,7 +30,7 @@ This project replaces a Google Sheets habit tracker. In the spreadsheet, every m
 - Opens on the current month, with year and month pickers for past months
 - Manage page to create, rename, archive and delete habits and categories
 - Categories with their own colours, shown on each card
-- "Copy habits from previous month" button
+- Copy habits from any month to any month (titles and categories, never check-ins)
 - In-app monthly report: best and weakest habits, strongest and weakest weekday, change since last month, category totals and history
 - Sign-up with email verification, and a separate login for each person
 - English and French
@@ -87,9 +87,9 @@ docker compose logs app     # see the app's log
 1. **Create an account.** Go to http://localhost:3000/signup.html and fill in your name, email and password (at least 8 characters). The birthday is optional.
 2. **Verify your email.** No real email is sent while the app runs locally. Open Mailpit at http://localhost:8025, open the "Confirm your email" message and click the link.
 3. **Log in.**
-4. **Set up.** Open **Manage**, add a few categories (name and colour), then add your habits for the month.
+4. **Set up.** Open **Manage**, add a few categories (name and colour), then add your habits for the month. To start a new month quickly, use **Copy habits** on the same page.
 5. **Track.** Go back to the month view and click a day on a card to check it. Click again to uncheck.
-6. **Look back.** Use the month and year pickers to see previous months. Use **Copy habits from previous month** to start a new month quickly.
+6. **Look back.** Use the month and year pickers to see previous months. Habits can be copied from any month to any month on the **Manage** page (see step 4).
 7. **Review.** Open **Report** for the monthly report and history.
 
 The language switcher and the sun/moon button (light and dark mode) are in the top bar.

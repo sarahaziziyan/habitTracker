@@ -12,8 +12,6 @@
   <main>
     <div class="toolbar">
       <span id="pickers" class="toolbar" style="margin:0"></span>
-      <button id="copyBtn"></button>
-      <span id="copyMsg" class="msg"></span>
     </div>
     <div id="cards" class="cards"></div>
   </main>
@@ -21,7 +19,6 @@
   <script src="/app.js"></script>
   <script>
     document.getElementById('hdr').innerHTML = headerHtml();
-    document.getElementById('copyBtn').textContent = t('copyPrev');
 
     let ym = getYM();   // current month unless ?year=&month= is in the URL
 
@@ -111,16 +108,6 @@
         load();   // reload so streaks and percentages update
       } catch (err) { alert(err.message); }
     });
-
-    document.getElementById('copyBtn').onclick = async () => {
-      const from = prevYM(ym.year, ym.month);
-      const out = await api('POST', '/api/habits/copy', {
-        fromYear: from.year, fromMonth: from.month, toYear: ym.year, toMonth: ym.month });
-      const el = document.getElementById('copyMsg');
-      el.className = 'msg ok';
-      el.textContent = out.copied ? out.copied + ' ' + t('copied') : t('nothingToCopy');
-      load();
-    };
 
     function go(newYm) {
       ym = newYm;

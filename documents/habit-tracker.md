@@ -16,7 +16,7 @@ This document explains what the app does, how to run it, how it is built, and ho
 | Months | The app opens on the current month. Year and month pickers (and a Today button) let you browse past months. |
 | Manage page | Create, rename, archive, un-archive and delete habits. Create and delete categories. |
 | Categories | Each habit has one category, created by you. The category name and colour appear on the card. |
-| Copy from last month | One button copies the previous month's habits (titles and categories only, no check-ins, no duplicates). |
+| Copy habits | Copy the habits of any month into any other month (titles and categories only, no check-ins, no duplicates). |
 | Report | An in-app end-of-month report (see section 6). Nothing is emailed. |
 | Accounts | Sign-up with name, email, password and an optional birthday. Login is blocked until the email address is verified through a link. |
 | Languages | English and French. The choice is remembered. |
@@ -54,7 +54,7 @@ On the very first start, Postgres creates the tables automatically from `db/sche
 - See the database's log: `docker compose logs db`
 
 ### Keeping and resetting your data
-Your data lives in a Docker volume named `pgdata`. It survives stopping, restarting and rebuilding.
+Your data lives in a Docker volume named `pgdata`. It survives stopping, restarting and rebuilding. Docker prefixes the volume name with the project name, and `docker-compose.yml` pins that name to `habittracker`, so the volume is always `habittracker_pgdata`, even if you rename or move the project folder. (Without the pin, Docker uses the folder name, so renaming the folder silently creates a new, empty database and leaves the old one behind.) You can list volumes with `docker volume ls`.
 
 > **Warning:** `docker compose down -v` deletes that volume and all accounts and habits with it. Use it only when you want to start from a completely empty database. It is also the way to re-run `db/schema.sql` from scratch.
 
@@ -62,6 +62,22 @@ Your data lives in a Docker volume named `pgdata`. It survives stopping, restart
 1. Open http://localhost:3000/signup.html and create an account.
 2. No real email is sent. Open http://localhost:8025 (Mailpit), open the "Confirm your email" message and click the link.
 3. You are sent to the login page and can log in.
+
+### Backing up and restoring
+
+Make a backup of the whole database to a file (run in the project folder, with the app running):
+
+```
+docker compose exec -T db pg_dump -U habit habit > backup.sql
+```
+
+Restore a backup into an empty database:
+
+```
+docker compose exec -T db psql -U habit habit < backup.sql
+```
+
+Backups are plain SQL files. Keep them somewhere safe, not inside the git repository (`*.sql` files other than `db/schema.sql` should not be committed).
 
 ---
 
@@ -74,9 +90,9 @@ Your data lives in a Docker volume named `pgdata`. It survives stopping, restart
 - the habit title at the top left
 - three boxes at the bottom: Current streak, Longest, and Completion
 
-**Manage page.** Add a category (name and colour) and add a habit (title and category) for the month you have selected. In the table you can rename a habit, change its category, archive it (hide it from the month view, reversible) or delete it. Deleting or archiving a habit only affects the month it belongs to; the same habit in other months is untouched.
+**Manage page.** Add a category (name and colour) and add a habit (title and category) for the month you have selected. A **Copy habits** panel copies habits between months (see below). In the table you can rename a habit, change its category, archive it (hide it from the month view, reversible) or delete it. Deleting or archiving a habit only affects the month it belongs to; the same habit in other months is untouched.
 
-**Copy from previous month.** On the month view, this button copies last month's habits into the month you are looking at. Habits that already exist (same title) are skipped, so pressing it twice is safe. Check-ins are never copied.
+**Copy habits.** On the Manage page, the **Copy habits** panel has a From month and year and a To month and year. It starts prefilled with the previous month and the month you are managing, so the common case is one click. You can choose any two different months. Archived habits are not copied. Habits that already exist in the destination (same title) are skipped, so copying twice is safe. Check-ins are never copied. If you copy into a month other than the one you are managing, a link lets you jump there.
 
 **Report page.** The monthly report and the month-by-month history. See section 6.
 
@@ -240,7 +256,7 @@ All `/api/...` endpoints need a logged-in session and return JSON. `year` and `m
 | `PATCH /api/habits/:id` | Change a habit's `title`, `categoryId` or `archived`. |
 | `DELETE /api/habits/:id` | Delete a habit (that month only). |
 | `PUT /api/habits/:id/check` | Check or uncheck a day. Body: `day` (`YYYY-MM-DD`) and `checked` (true or false). |
-| `POST /api/habits/copy` | Copy habits between months. Body: `fromYear`, `fromMonth`, `toYear`, `toMonth`. |
+| `POST /api/habits/copy` | Copy habits from any month to any other month. Body: `fromYear`, `fromMonth`, `toYear`, `toMonth`. Returns `copied` (new habits created) and `found` (habits in the source month). Returns 400 for an invalid or identical month. |
 | `GET /api/categories` | List the user's categories. |
 | `POST /api/categories` | Create a category. Body: `name`, `color`. |
 | `DELETE /api/categories/:id` | Delete a category. |
@@ -283,7 +299,7 @@ Go through this after significant changes.
 5. Future days cannot be checked.
 6. Stop and restart with `docker compose down` then `up`. Everything is still there.
 7. Switch to a past month and back. Today returns to the current month.
-8. Copy from the previous month. Pressing it twice adds nothing new.
+8. Copy habits between two months (including a month other than the one you are managing). Copying twice adds nothing new, and copying from an empty month says so.
 9. Delete a habit in one month. The same habit in another month remains.
 10. Archive and un-archive a habit.
 11. Open the report and check the numbers by hand for one habit.

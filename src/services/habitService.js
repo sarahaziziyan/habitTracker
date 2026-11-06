@@ -103,7 +103,10 @@ async function copyMonth(userId, from, to) {
      ON CONFLICT (user_id, year, month, title) DO NOTHING
      RETURNING id`,
     [userId, from.year, from.month, to.year, to.month]);
-  return { copied: r.rows.length };
+  const src = await db.query(
+    'SELECT COUNT(*)::int AS n FROM habits WHERE user_id = $1 AND year = $2 AND month = $3 AND archived = false',
+    [userId, from.year, from.month]);
+  return { copied: r.rows.length, found: src.rows[0].n };
 }
 
 module.exports = {

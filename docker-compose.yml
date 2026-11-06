@@ -1,3 +1,8 @@
+# Pins the project name so the database volume is always "habittracker_pgdata",
+# even if this folder is renamed or moved. Do not change it, or the app will
+# connect to a different (empty) database.
+name: habittracker
+
 services:
   db:
     image: postgres:16
