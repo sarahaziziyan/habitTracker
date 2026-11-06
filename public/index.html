@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Habit Tracker</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <header id="hdr"></header>
+  <main>
+    <div class="toolbar">
+      <span id="pickers" class="toolbar" style="margin:0"></span>
+      <button id="copyBtn"></button>
+      <span id="copyMsg" class="msg"></span>
+    </div>
+    <div id="cards" class="cards"></div>
+  </main>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('hdr').innerHTML = headerHtml();
+    document.getElementById('copyBtn').textContent = t('copyPrev');
+
+    let ym = getYM();   // current month unless ?year=&month= is in the URL
+
+    // Pick white or near-black text, whichever is more readable on the category colour
+    function inkOn(hex) {
+      const n = parseInt(hex.slice(1), 16);
+      const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+      const L = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+      return L > 0.4 ? '#141514' : '#ffffff';
+    }
+
+    function cardHtml(h, year, month) {
+      const color = h.category_color || '#cccccc';
+      const first = new Date(Date.UTC(year, month - 1, 1));
+      const offset = (first.getUTCDay() + 6) % 7;          // Monday = 0
+      const total = new Date(Date.UTC(year, month, 0)).getUTCDate();
+      const today = todayStr();
+      const checked = new Set(h.days);
+
+      let cells = '';
+      // Greyed out days from the previous month
+      const prevTotal = new Date(Date.UTC(year, month - 1, 0)).getUTCDate();
+      for (let i = offset - 1; i >= 0; i--)
+        cells += '<div class="day out">' + (prevTotal - i) + '</div>';
+
+      for (let d = 1; d <= total; d++) {
+        const ds = year + '-' + pad2(month) + '-' + pad2(d);
+        const isFuture = ds > today;
+        const cls = ['day', isFuture ? 'future' : 'live'];
+        if (checked.has(ds)) cls.push('checked');
+        if (ds === today) cls.push('today');
+        cells += '<div class="' + cls.join(' ') + '" data-habit="' + h.id + '" data-day="' + ds + '">' + d + '</div>';
+      }
+      // Greyed out days from the next month
+      const used = offset + total;
+      const rest = (7 - (used % 7)) % 7;
+      for (let i = 1; i <= rest; i++) cells += '<div class="day out">' + i + '</div>';
+
+      const wd = I18N[currentLang].weekdays.map(w =>
+        '<div class="wd">' + w.slice(0, 3) + '</div>').join('');
+
+      // The category colour is passed as a CSS variable; style.css blends it
+      // with the theme surface so cards look right in light and dark mode.
+      return '<div class="card-wrap"><div class="card" data-card="' + h.id + '" style="--cat:' + color + ';--cat-ink:' + inkOn(color) + '">' +
+        '<div class="card-title"><span>' + escapeHtml(h.title) + '</span>' +
+          (h.category_name ? '<span class="cat-tip" data-full="' + escapeHtml(h.category_name) + '"><span class="card-category">' + escapeHtml(h.category_name) + '</span></span>' : '') +
+        '</div>' +
+        '<div class="grid">' + wd + cells + '</div>' +
+        '<div class="card-footer">' +
+          '<div class="card-stat"><b>' + h.stats.currentStreak + ' ' + t('days') + '</b>' + t('currentStreak') + '</div>' +
+          '<div class="card-stat"><b>' + h.stats.longestStreak + ' ' + t('days') + '</b>' + t('longestStreak') + '</div>' +
+          '<div class="card-stat"><b>' + h.stats.percent + '%</b>' + t('completion') + '</div>' +
+        '</div></div></div>';
+    }
+
+    // Flag categories that are cut off with "..." so the hover tooltip shows the full name
+    function markTruncated() {
+      document.querySelectorAll('.cat-tip').forEach(el => {
+        const pill = el.firstElementChild;
+        el.classList.toggle('is-truncated', pill.scrollWidth > pill.clientWidth);
+      });
+    }
+    window.addEventListener('resize', markTruncated);
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    async function load() {
+      const data = await api('GET', '/api/habits?year=' + ym.year + '&month=' + ym.month);
+      const box = document.getElementById('cards');
+      box.innerHTML = data.habits.length
+        ? data.habits.map(h => cardHtml(h, data.year, data.month)).join('')
+        : '<div class="empty">' + t('noHabits') + '</div>';
+      markTruncated();
+    }
+
+    // One click handler for every day square
+    document.getElementById('cards').addEventListener('click', async (e) => {
+      const el = e.target.closest('.day');
+      if (!el || !el.dataset.day) return;
+      if (el.classList.contains('future')) { alert(t('futureLocked')); return; }
+      const nowChecked = !el.classList.contains('checked');
+      try {
+        await api('PUT', '/api/habits/' + el.dataset.habit + '/check',
+          { day: el.dataset.day, checked: nowChecked });
+        load();   // reload so streaks and percentages update
+      } catch (err) { alert(err.message); }
+    });
+
+    document.getElementById('copyBtn').onclick = async () => {
+      const from = prevYM(ym.year, ym.month);
+      const out = await api('POST', '/api/habits/copy', {
+        fromYear: from.year, fromMonth: from.month, toYear: ym.year, toMonth: ym.month });
+      const el = document.getElementById('copyMsg');
+      el.className = 'msg ok';
+      el.textContent = out.copied ? out.copied + ' ' + t('copied') : t('nothingToCopy');
+      load();
+    };
+
+    function go(newYm) {
+      ym = newYm;
+      history.replaceState(null, '', '?year=' + ym.year + '&month=' + ym.month);
+      renderPickers(document.getElementById('pickers'), ym, go);
+      load();
+    }
+
+    applyI18n();
+    renderPickers(document.getElementById('pickers'), ym, go);
+    load();
+  </script>
+</body>
+</html>

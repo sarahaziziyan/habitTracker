@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <div class="auth-box">
+    <div style="text-align:right" id="langBox"></div>
+    <h2 data-i18n="login"></h2>
+    <form id="f">
+      <label data-i18n="email"></label>
+      <input type="email" name="email" required>
+      <label data-i18n="password"></label>
+      <input type="password" name="password" required>
+      <button class="primary" type="submit" data-i18n="login"></button>
+    </form>
+    <div id="msg" class="msg"></div>
+    <p class="msg"><span data-i18n="noAccount"></span> <a href="/signup.html" data-i18n="signup"></a></p>
+  </div>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('langBox').innerHTML = langSwitcherHtml() + themeToggleHtml();
+    applyI18n();
+    const msg = document.getElementById('msg');
+    if (new URLSearchParams(location.search).get('verified')) {
+      msg.className = 'msg ok'; msg.textContent = t('verified');
+    }
+    document.getElementById('f').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target));
+      try {
+        await api('POST', '/auth/login', fd);
+        location.href = '/';
+      } catch (err) {
+        msg.className = 'msg error';
+        msg.textContent = err.data && err.data.error === 'email_not_verified'
+          ? t('notVerified') : t('badCredentials');
+      }
+    };
+  </script>
+</body>
+</html>

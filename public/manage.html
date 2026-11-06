@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manage habits</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <header id="hdr"></header>
+  <main>
+    <div class="toolbar"><span id="pickers" class="toolbar" style="margin:0"></span></div>
+
+    <div class="panel">
+      <h2 data-i18n="category"></h2>
+      <div class="form-row">
+        <input id="catName" data-i18n-ph="category">
+        <input id="catColor" type="color" value="#5b8def">
+        <button class="primary" id="addCat" data-i18n="addCategory"></button>
+      </div>
+      <div id="catList"></div>
+    </div>
+
+    <div class="panel">
+      <h2 data-i18n="addHabit"></h2>
+      <div class="form-row">
+        <input id="habitTitle" data-i18n-ph="title">
+        <select id="habitCat"></select>
+        <button class="primary" id="addHabit" data-i18n="addHabit"></button>
+      </div>
+      <div id="habitMsg" class="msg"></div>
+    </div>
+
+    <div class="panel">
+      <table>
+        <thead><tr><th data-i18n="title"></th><th data-i18n="category"></th><th></th></tr></thead>
+        <tbody id="habitRows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('hdr').innerHTML = headerHtml();
+    let ym = getYM();
+    let categories = [];
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function catOptions(selectedId) {
+      return '<option value="">' + t('noCategory') + '</option>' + categories.map(c =>
+        '<option value="' + c.id + '"' + (c.id === selectedId ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('');
+    }
+
+    async function loadCategories() {
+      categories = await api('GET', '/api/categories');
+      document.getElementById('habitCat').innerHTML = catOptions(null);
+      document.getElementById('catList').innerHTML = categories.map(c =>
+        '<span class="pill" style="background:' + c.color + '55;margin:0 6px 6px 0">' + esc(c.name) +
+        ' <a href="#" onclick="delCat(' + c.id + ');return false">&times;</a></span>').join('');
+    }
+
+    async function loadHabits() {
+      const data = await api('GET', '/api/habits?archived=1&year=' + ym.year + '&month=' + ym.month);
+      document.getElementById('habitRows').innerHTML = data.habits.map(h =>
+        '<tr style="' + (h.archived ? 'opacity:.5' : '') + '">' +
+        '<td><input value="' + esc(h.title) + '" onchange="rename(' + h.id + ', this.value)"></td>' +
+        '<td><select onchange="recat(' + h.id + ', this.value)">' + catOptions(h.category_id) + '</select></td>' +
+        '<td style="text-align:right">' +
+          '<button onclick="archive(' + h.id + ',' + !h.archived + ')">' + (h.archived ? t('unarchive') : t('archive')) + '</button> ' +
+          '<button class="danger" onclick="del(' + h.id + ')">' + t('delete') + '</button>' +
+        '</td></tr>').join('');
+    }
+
+    async function rename(id, title) { if (title.trim()) await api('PATCH', '/api/habits/' + id, { title }); loadHabits(); }
+    async function recat(id, v) { await api('PATCH', '/api/habits/' + id, { categoryId: v ? Number(v) : null }); }
+    async function archive(id, flag) { await api('PATCH', '/api/habits/' + id, { archived: flag }); loadHabits(); }
+    async function del(id) { if (confirm(t('confirmDelete'))) { await api('DELETE', '/api/habits/' + id); loadHabits(); } }
+    async function delCat(id) { await api('DELETE', '/api/categories/' + id); await loadCategories(); loadHabits(); }
+
+    document.getElementById('addCat').onclick = async () => {
+      const name = document.getElementById('catName').value;
+      if (!name.trim()) return;
+      await api('POST', '/api/categories', { name, color: document.getElementById('catColor').value });
+      document.getElementById('catName').value = '';
+      await loadCategories(); loadHabits();
+    };
+
+    document.getElementById('addHabit').onclick = async () => {
+      const title = document.getElementById('habitTitle').value;
+      const cat = document.getElementById('habitCat').value;
+      const msg = document.getElementById('habitMsg');
+      if (!title.trim()) return;
+      try {
+        await api('POST', '/api/habits', { title, categoryId: cat ? Number(cat) : null, year: ym.year, month: ym.month });
+        document.getElementById('habitTitle').value = '';
+        msg.textContent = '';
+        loadHabits();
+      } catch (err) { msg.className = 'msg error'; msg.textContent = err.message; }
+    };
+
+    function go(newYm) {
+      ym = newYm;
+      history.replaceState(null, '', '?year=' + ym.year + '&month=' + ym.month);
+      renderPickers(document.getElementById('pickers'), ym, go);
+      loadHabits();
+    }
+
+    applyI18n();
+    renderPickers(document.getElementById('pickers'), ym, go);
+    loadCategories().then(loadHabits);
+  </script>
+</body>
+</html>

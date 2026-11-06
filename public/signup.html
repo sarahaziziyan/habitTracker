@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign up</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <div class="auth-box">
+    <div style="text-align:right" id="langBox"></div>
+    <h2 data-i18n="signup"></h2>
+    <form id="f">
+      <label data-i18n="name"></label>
+      <input type="text" name="name" required>
+      <label data-i18n="email"></label>
+      <input type="email" name="email" required>
+      <label data-i18n="password"></label>
+      <input type="password" name="password" minlength="8" required>
+      <label data-i18n="birthday"></label>
+      <input type="date" name="birthday">
+      <button class="primary" type="submit" data-i18n="signup"></button>
+    </form>
+    <div id="msg" class="msg"></div>
+    <p class="msg"><span data-i18n="haveAccount"></span> <a href="/login.html" data-i18n="login"></a></p>
+  </div>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('langBox').innerHTML = langSwitcherHtml() + themeToggleHtml();
+    applyI18n();
+    const msg = document.getElementById('msg');
+    document.getElementById('f').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target));
+      try {
+        await api('POST', '/auth/signup', fd);
+        msg.className = 'msg ok'; msg.textContent = t('verifySent');
+        e.target.reset();
+      } catch (err) {
+        const code = err.data && err.data.error;
+        msg.className = 'msg error';
+        msg.textContent = code === 'email_taken' ? t('emailTaken')
+          : code === 'weak_password' ? t('weakPassword')
+          : t('genericError');
+      }
+    };
+  </script>
+</body>
+</html>

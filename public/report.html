@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <header id="hdr"></header>
+  <main>
+    <div class="toolbar"><span id="pickers" class="toolbar" style="margin:0"></span></div>
+    <h2 data-i18n="reportTitle"></h2>
+    <div id="summary" class="stat-grid"></div>
+    <div class="panel"><table><thead id="thead"></thead><tbody id="rows"></tbody></table></div>
+    <div class="panel"><h2 data-i18n="categories"></h2><div id="cats"></div></div>
+    <div class="panel"><h2 data-i18n="history"></h2><table><tbody id="hist"></tbody></table></div>
+  </main>
+  <script src="/i18n.js"></script>
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('hdr').innerHTML = headerHtml();
+    let ym = getYM();
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function stat(label, value) {
+      return '<div class="stat"><div class="label">' + label + '</div><div class="value">' + value + '</div></div>';
+    }
+    function bar(p) { return '<div class="bar"><span style="width:' + p + '%"></span></div>'; }
+    const wdName = i => I18N[currentLang].weekdays[i];
+
+    async function load() {
+      const r = await api('GET', '/api/report?year=' + ym.year + '&month=' + ym.month);
+
+      const cards = [stat(t('overall'), r.overallPercent + '%')];
+      if (r.best) cards.push(stat(t('bestHabit'), esc(r.best.title) + ' (' + r.best.percent + '%)'));
+      if (r.worst) cards.push(stat(t('weakestHabit'), esc(r.worst.title) + ' (' + r.worst.percent + '%)'));
+      if (r.bestStreak && r.bestStreak.longestStreak > 0)
+        cards.push(stat(t('bestStreak'), esc(r.bestStreak.title) + ': ' + r.bestStreak.longestStreak + ' ' + t('days')));
+      if (r.strongestWeekday) cards.push(stat(t('strongestDay'), wdName(r.strongestWeekday.weekday) + ' (' + r.strongestWeekday.percent + '%)'));
+      if (r.weakestWeekday) cards.push(stat(t('weakestDay'), wdName(r.weakestWeekday.weekday) + ' (' + r.weakestWeekday.percent + '%)'));
+      if (r.mostImproved && r.mostImproved.change > 0)
+        cards.push(stat(t('mostImproved'), esc(r.mostImproved.title) + ' (+' + r.mostImproved.change + ' pts)'));
+      if (r.mostDeclined && r.mostDeclined.change < 0)
+        cards.push(stat(t('mostDeclined'), esc(r.mostDeclined.title) + ' (' + r.mostDeclined.change + ' pts)'));
+      cards.push(stat(t('neverDone'), r.neverDone.length ? r.neverDone.map(esc).join(', ') : t('none')));
+      document.getElementById('summary').innerHTML = cards.join('');
+
+      document.getElementById('thead').innerHTML =
+        '<tr><th>' + t('title') + '</th><th>' + t('category') + '</th><th>' + t('done') + '</th><th>%</th>' +
+        '<th>' + t('best') + '</th><th>' + t('vsPrevious') + '</th></tr>';
+      document.getElementById('rows').innerHTML = r.habits.map(h =>
+        '<tr><td>' + esc(h.title) + '</td><td>' + esc(h.category || '') + '</td>' +
+        '<td>' + h.done + '/' + h.countedDays + '</td><td style="width:160px">' + h.percent + '% ' + bar(h.percent) + '</td>' +
+        '<td>' + h.longestStreak + '</td>' +
+        '<td>' + (h.change === null ? '-' : (h.change > 0 ? '+' : '') + h.change + ' pts') + '</td></tr>').join('');
+
+      document.getElementById('cats').innerHTML = r.categories.map(c =>
+        '<div style="margin-bottom:10px">' + esc(c.name || t('noCategory')) + ': ' + c.percent + '% ' + bar(c.percent) + '</div>').join('');
+
+      const hist = await api('GET', '/api/report/history');
+      document.getElementById('hist').innerHTML = hist.map(h =>
+        '<tr><td><a href="?year=' + h.year + '&month=' + h.month + '">' + I18N[currentLang].months[h.month - 1] + ' ' + h.year + '</a></td>' +
+        '<td>' + h.habits + ' ' + t('habitsWord') + '</td><td>' + h.check_ins + ' ' + t('checkIns') + '</td></tr>').join('');
+    }
+
+    function go(newYm) {
+      ym = newYm;
+      history.replaceState(null, '', '?year=' + ym.year + '&month=' + ym.month);
+      renderPickers(document.getElementById('pickers'), ym, go);
+      load();
+    }
+
+    applyI18n();
+    renderPickers(document.getElementById('pickers'), ym, go);
+    load();
+  </script>
+</body>
+</html>
