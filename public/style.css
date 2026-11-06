@@ -52,6 +52,7 @@
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
   --radius-sm: 14px; --radius-md: 22px; --radius-lg: 30px; --radius-full: 999px;
+  --gutter: clamp(16px, 3vw, 48px);
   --font-sans: "Outfit", "Urbanist", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light dark;
 }
@@ -64,11 +65,12 @@ body { margin: 0; font-family: var(--font-sans); font-size: 16px; line-height: 2
 h1, h2 { font-weight: 500; margin: 0; }
 a { color: var(--ink); }
 :focus-visible { outline: 2px solid var(--lavender-ink); outline-offset: 2px; }
-main { padding: var(--space-5); max-width: 1120px; margin: 0 auto var(--space-8); }
+/* Fluid layout: the page uses the full window width; the side gutter grows a little on bigger screens */
+main { padding: var(--space-5) var(--gutter); margin: 0 0 var(--space-8); }
 main > h2 { font-size: 30px; line-height: 36px; letter-spacing: -0.01em; margin: var(--space-2) 0 var(--space-5); }
 
 /* ---------- Header / nav ---------- */
-header { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding: var(--space-4) var(--space-5); max-width: 1120px; margin: 0 auto; }
+header { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; padding: var(--space-4) var(--gutter); }
 header h1 { font-size: 30px; line-height: 36px; letter-spacing: -0.01em; margin: 0 auto 0 0; }
 header .btn.active { background: var(--primary); color: var(--on-primary); }
 
@@ -132,7 +134,13 @@ input[type="date"] { padding: 0 16px; }
 .card-icon:hover { background: color-mix(in srgb, var(--cat-ink, var(--ink)) 16%, transparent); }
 .card-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .pin-btn.on svg { fill: currentColor; }
-.card-wrap.dragging { opacity: .4; }
+.card-wrap.dragging, tr.dragging { opacity: .4; }
+.handle-cell { width: 44px; padding-right: 0; }
+.th-sort { height: auto; padding: 4px 8px; margin: -4px -8px; background: transparent; color: inherit; font: inherit; border-radius: var(--radius-sm); }
+.th-sort:hover { background: var(--surface-sunken); color: var(--ink); }
+.row-handle { cursor: grab; }
+.row-handle:active { cursor: grabbing; }
+.row-handle svg circle { fill: currentColor; stroke: none; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: var(--space-3) var(--space-4) var(--space-4); }
 .grid .wd { font-size: 12px; line-height: 16px; font-weight: 500; text-align: center; padding: var(--space-2) 0; color: var(--ink-muted); }
 .day {

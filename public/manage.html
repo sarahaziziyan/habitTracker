@@ -44,8 +44,9 @@
     </div>
 
     <div class="panel">
+      <div class="msg" id="sortHint" style="margin:0 0 var(--space-3)"></div>
       <table>
-        <thead><tr><th data-i18n="title"></th><th data-i18n="category"></th><th></th></tr></thead>
+        <thead id="habitHead"></thead>
         <tbody id="habitRows"></tbody>
       </table>
     </div>
@@ -74,18 +75,64 @@
         ' <a href="#" onclick="delCat(' + c.id + ');return false">&times;</a></span>').join('');
     }
 
+    // Lucide line icons (drawn with currentColor)
+    const ICON_GRIP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>';
+    const ICON_PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+
+    let currentHabits = [];
+    let sortState = { key: null, dir: 'asc' };   // which column the list was last sorted by
+
+    // Clickable column headers: click to sort A-Z, click again for Z-A.
+    function renderHead() {
+      const th = (key, label) => {
+        const on = sortState.key === key;
+        const arrow = on ? (sortState.dir === 'asc' ? ' \u25B2' : ' \u25BC') : '';
+        return '<th aria-sort="' + (on ? (sortState.dir === 'asc' ? 'ascending' : 'descending') : 'none') + '">' +
+          '<button type="button" class="th-sort" onclick="sortBy(\'' + key + '\')">' + label + arrow + '</button></th>';
+      };
+      document.getElementById('habitHead').innerHTML =
+        '<tr><th style="width:44px"></th>' + th('title', t('title')) + th('category', t('category')) + '<th></th></tr>';
+    }
+
+    // Sorts the habits and saves the result as the order (the Home page uses it too).
+    // Pinned habits stay above the others; each group is sorted on its own.
+    async function sortBy(key) {
+      const dir = sortState.key === key && sortState.dir === 'asc' ? 'desc' : 'asc';
+      const sign = dir === 'asc' ? 1 : -1;
+      const collator = new Intl.Collator(currentLang, { sensitivity: 'base', numeric: true });
+      const sorted = [...currentHabits].sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        if (key === 'category') {
+          if (!a.category_name !== !b.category_name) return a.category_name ? -1 : 1;   // no category: always last
+          const c = collator.compare(a.category_name || '', b.category_name || '');
+          return c ? sign * c : collator.compare(a.title, b.title);
+        }
+        return sign * collator.compare(a.title, b.title);
+      });
+      try {
+        await api('PUT', '/api/habits/order', { year: ym.year, month: ym.month, ids: sorted.map(h => h.id) });
+        sortState = { key, dir };
+      } catch (err) { alert(err.message); }
+      await loadHabits();
+      renderHead();
+    }
+
     async function loadHabits() {
       const data = await api('GET', '/api/habits?archived=1&year=' + ym.year + '&month=' + ym.month);
+      currentHabits = data.habits;
       document.getElementById('habitRows').innerHTML = data.habits.map(h =>
-        '<tr style="' + (h.archived ? 'opacity:.5' : '') + '">' +
+        '<tr data-id="' + h.id + '" data-pinned="' + (h.pinned ? 1 : 0) + '" style="' + (h.archived ? 'opacity:.5' : '') + '">' +
+        '<td class="handle-cell"><button type="button" class="card-icon row-handle" aria-label="' + t('dragHandle') + '" title="' + t('dragHandle') + '">' + ICON_GRIP + '</button></td>' +
         '<td><input value="' + esc(h.title) + '" onchange="rename(' + h.id + ', this.value)"></td>' +
         '<td><select onchange="recat(' + h.id + ', this.value)">' + catOptions(h.category_id) + '</select></td>' +
         '<td style="text-align:right">' +
+          '<button type="button" class="card-icon pin-btn' + (h.pinned ? ' on' : '') + '" onclick="pin(' + h.id + ',' + !h.pinned + ')" aria-pressed="' + (h.pinned ? 'true' : 'false') + '" aria-label="' + (h.pinned ? t('unpinCard') : t('pinCard')) + '" title="' + (h.pinned ? t('unpinCard') : t('pinCard')) + '">' + ICON_PIN + '</button> ' +
           '<button onclick="archive(' + h.id + ',' + !h.archived + ')">' + (h.archived ? t('unarchive') : t('archive')) + '</button> ' +
           '<button class="danger" onclick="del(' + h.id + ')">' + t('delete') + '</button>' +
         '</td></tr>').join('');
     }
 
+    async function pin(id, flag) { await api('PATCH', '/api/habits/' + id, { pinned: flag }); sortState = { key: null, dir: 'asc' }; renderHead(); loadHabits(); }
     async function rename(id, title) { if (title.trim()) await api('PATCH', '/api/habits/' + id, { title }); loadHabits(); }
     async function recat(id, v) { await api('PATCH', '/api/habits/' + id, { categoryId: v ? Number(v) : null }); }
     async function archive(id, flag) { await api('PATCH', '/api/habits/' + id, { archived: flag }); loadHabits(); }
@@ -156,6 +203,60 @@
       }
     };
 
+    // ---- Reordering: drag a row by its handle (or Tab to the handle and use the arrow keys).
+    // This is the same order the Home page uses. Pinned habits stay above the others,
+    // so rows move within their own group; use the pin button to change group. ----
+    const rowsEl = document.getElementById('habitRows');
+    let dragRow = null;
+
+    function saveOrder() {
+      sortState = { key: null, dir: 'asc' };   // a manual move replaces any sort
+      renderHead();
+      const ids = [...rowsEl.querySelectorAll('tr')].map(r => Number(r.dataset.id));
+      api('PUT', '/api/habits/order', { year: ym.year, month: ym.month, ids }).catch(() => loadHabits());
+    }
+
+    rowsEl.addEventListener('pointerdown', (e) => {
+      const tr = e.target.closest('tr');
+      if (tr) tr.draggable = !!e.target.closest('.row-handle');
+    });
+    rowsEl.addEventListener('dragstart', (e) => {
+      const tr = e.target.closest('tr');
+      if (!tr || !tr.draggable) { e.preventDefault(); return; }
+      dragRow = tr;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', tr.dataset.id);   // Firefox needs some data
+      setTimeout(() => tr.classList.add('dragging'), 0);
+    });
+    rowsEl.addEventListener('dragover', (e) => {
+      if (!dragRow) return;
+      const target = e.target.closest('tr');
+      if (!target || target === dragRow || target.dataset.pinned !== dragRow.dataset.pinned) return;
+      e.preventDefault();
+      const r = target.getBoundingClientRect();
+      rowsEl.insertBefore(dragRow, e.clientY < r.top + r.height / 2 ? target : target.nextSibling);
+    });
+    rowsEl.addEventListener('drop', (e) => { if (dragRow) e.preventDefault(); });
+    rowsEl.addEventListener('dragend', () => {
+      if (!dragRow) return;
+      dragRow.classList.remove('dragging');
+      dragRow.draggable = false;
+      dragRow = null;
+      saveOrder();
+    });
+    rowsEl.addEventListener('keydown', (e) => {
+      const handle = e.target.closest('.row-handle');
+      const step = { ArrowUp: -1, ArrowDown: 1 }[e.key];
+      if (!handle || !step) return;
+      e.preventDefault();
+      const tr = handle.closest('tr');
+      const sib = step < 0 ? tr.previousElementSibling : tr.nextElementSibling;
+      if (!sib || sib.dataset.pinned !== tr.dataset.pinned) return;
+      rowsEl.insertBefore(tr, step < 0 ? sib : sib.nextSibling);
+      handle.focus();
+      saveOrder();
+    });
+
     function go(newYm) {
       ym = newYm;
       history.replaceState(null, '', '?year=' + ym.year + '&month=' + ym.month);
@@ -165,6 +266,8 @@
     }
 
     applyI18n();
+    document.getElementById('sortHint').textContent = t('sortHint');
+    renderHead();
     renderPickers(document.getElementById('pickers'), ym, go);
     prefillCopy();
     loadCategories().then(loadHabits);
