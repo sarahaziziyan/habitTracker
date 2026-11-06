@@ -26,6 +26,7 @@ This project replaces a Google Sheets habit tracker. In the spreadsheet, every m
 
 - Monthly habit cards with a Monday-first calendar and greyed-out days from neighbouring months
 - Click a day to check it off. Future days are locked
+- Reorder the cards by dragging them, and pin favourite habits to the top
 - Current streak, longest streak and completion percentage for every habit
 - Opens on the current month, with year and month pickers for past months
 - Manage page to create, rename, archive and delete habits and categories

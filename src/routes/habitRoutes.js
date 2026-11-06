@@ -48,6 +48,16 @@ router.put('/:id/check', async (req, res) => {
   res.json(result);
 });
 
+// PUT /api/habits/order  body: { year, month, ids: [habit ids in display order] }
+router.put('/order', async (req, res) => {
+  const { year, month } = parseYM(req.body);
+  const ids = req.body.ids;
+  if (!Array.isArray(ids) || !ids.every(Number.isInteger))
+    return res.status(400).json({ error: 'invalid_ids' });
+  await svc.setOrder(req.session.userId, year, month, ids);
+  res.json({ ok: true });
+});
+
 // POST /api/habits/copy  body: { fromYear, fromMonth, toYear, toMonth }
 router.post('/copy', async (req, res) => {
   const from = { year: Number(req.body.fromYear), month: Number(req.body.fromMonth) };

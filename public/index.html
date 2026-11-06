@@ -30,6 +30,9 @@
       return L > 0.4 ? '#141514' : '#ffffff';
     }
 
+    // Lucide line icon (drawn with currentColor)
+    const ICON_PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>';
+
     function cardHtml(h, year, month) {
       const color = h.category_color || '#cccccc';
       const first = new Date(Date.UTC(year, month - 1, 1));
@@ -62,9 +65,11 @@
 
       // The category colour is passed as a CSS variable; style.css blends it
       // with the theme surface so cards look right in light and dark mode.
-      return '<div class="card-wrap"><div class="card" data-card="' + h.id + '" style="--cat:' + color + ';--cat-ink:' + inkOn(color) + '">' +
-        '<div class="card-title"><span>' + escapeHtml(h.title) + '</span>' +
+      return '<div class="card-wrap" data-id="' + h.id + '" data-pinned="' + (h.pinned ? 1 : 0) + '"><div class="card" data-card="' + h.id + '" style="--cat:' + color + ';--cat-ink:' + inkOn(color) + '">' +
+        '<div class="card-title" tabindex="0" aria-description="' + t('dragHandle') + '">' +
+          '<span class="card-name">' + escapeHtml(h.title) + '</span>' +
           (h.category_name ? '<span class="cat-tip" data-full="' + escapeHtml(h.category_name) + '"><span class="card-category">' + escapeHtml(h.category_name) + '</span></span>' : '') +
+          '<button type="button" class="card-icon pin-btn' + (h.pinned ? ' on' : '') + '" data-habit="' + h.id + '" data-pinned="' + (h.pinned ? 1 : 0) + '" aria-pressed="' + (h.pinned ? 'true' : 'false') + '" aria-label="' + (h.pinned ? t('unpinCard') : t('pinCard')) + '" title="' + (h.pinned ? t('unpinCard') : t('pinCard')) + '">' + ICON_PIN + '</button>' +
         '</div>' +
         '<div class="grid">' + wd + cells + '</div>' +
         '<div class="card-footer">' +
@@ -98,6 +103,14 @@
 
     // One click handler for every day square
     document.getElementById('cards').addEventListener('click', async (e) => {
+      const pin = e.target.closest('.pin-btn');
+      if (pin) {
+        try {
+          await api('PATCH', '/api/habits/' + pin.dataset.habit, { pinned: pin.dataset.pinned !== '1' });
+          load();
+        } catch (err) { alert(err.message); }
+        return;
+      }
       const el = e.target.closest('.day');
       if (!el || !el.dataset.day) return;
       if (el.classList.contains('future')) { alert(t('futureLocked')); return; }
@@ -107,6 +120,62 @@
           { day: el.dataset.day, checked: nowChecked });
         load();   // reload so streaks and percentages update
       } catch (err) { alert(err.message); }
+    });
+
+    // ---- Reordering: drag a card by its title bar, or focus the title bar and use the arrow keys ----
+    const cardsEl = document.getElementById('cards');
+    let dragEl = null;
+
+    function saveOrder() {
+      const ids = [...cardsEl.querySelectorAll('.card-wrap')].map(w => Number(w.dataset.id));
+      api('PUT', '/api/habits/order', { year: ym.year, month: ym.month, ids }).catch(() => load());
+    }
+
+    // Only the title bar starts a drag (not the pin button), so clicking days keeps working
+    cardsEl.addEventListener('pointerdown', (e) => {
+      const wrap = e.target.closest('.card-wrap');
+      if (wrap) wrap.draggable = !!e.target.closest('.card-title') && !e.target.closest('.pin-btn');
+    });
+    cardsEl.addEventListener('dragstart', (e) => {
+      const wrap = e.target.closest('.card-wrap');
+      if (!wrap || !wrap.draggable) { e.preventDefault(); return; }
+      dragEl = wrap;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', wrap.dataset.id);   // Firefox needs some data
+      setTimeout(() => wrap.classList.add('dragging'), 0);
+    });
+    // Pinned and unpinned cards are two groups; a card can be moved within its own group.
+    // To change group, use the pin button.
+    cardsEl.addEventListener('dragover', (e) => {
+      if (!dragEl) return;
+      const target = e.target.closest('.card-wrap');
+      if (!target || target === dragEl || target.dataset.pinned !== dragEl.dataset.pinned) return;
+      e.preventDefault();
+      const r = target.getBoundingClientRect();
+      const dx = (e.clientX - (r.left + r.width / 2)) / r.width;
+      const dy = (e.clientY - (r.top + r.height / 2)) / r.height;
+      const before = Math.abs(dx) > Math.abs(dy) ? dx < 0 : dy < 0;
+      cardsEl.insertBefore(dragEl, before ? target : target.nextSibling);
+    });
+    cardsEl.addEventListener('drop', (e) => { if (dragEl) e.preventDefault(); });
+    cardsEl.addEventListener('dragend', () => {
+      if (!dragEl) return;
+      dragEl.classList.remove('dragging');
+      dragEl.draggable = false;
+      dragEl = null;
+      saveOrder();
+    });
+    cardsEl.addEventListener('keydown', (e) => {
+      const bar = e.target.classList.contains('card-title') ? e.target : null;
+      const step = { ArrowUp: -1, ArrowLeft: -1, ArrowDown: 1, ArrowRight: 1 }[e.key];
+      if (!bar || !step) return;
+      e.preventDefault();
+      const wrap = bar.closest('.card-wrap');
+      const sib = step < 0 ? wrap.previousElementSibling : wrap.nextElementSibling;
+      if (!sib || sib.dataset.pinned !== wrap.dataset.pinned) return;
+      cardsEl.insertBefore(wrap, step < 0 ? sib : sib.nextSibling);
+      bar.focus();
+      saveOrder();
     });
 
     function go(newYm) {

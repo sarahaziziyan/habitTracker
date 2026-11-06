@@ -12,6 +12,7 @@ This document explains what the app does, how to run it, how it is built, and ho
 |---|---|
 | Monthly cards | One card per habit per month: a solid title bar in the category colour, Monday-first weekday headers, and a day grid. Days from the neighbouring months are greyed out. |
 | Checking days | Click a day to check it, click again to uncheck. Future days are locked. |
+| Card order and pinning | Drag cards into any order by their title bar, and pin habits so they stay at the top. The order is saved per month. |
 | Statistics | Per card: current streak, longest streak, and completion percentage. |
 | Months | The app opens on the current month. Year and month pickers (and a Today button) let you browse past months. |
 | Manage page | Create, rename, archive, un-archive and delete habits. Create and delete categories. |
@@ -86,9 +87,11 @@ Backups are plain SQL files. Keep them somewhere safe, not inside the git reposi
 **Month view (home page).** Shows one card per active habit for the selected month. Use the pickers to change the month and year, or Today to jump back. Click a day on a card to check it. A day that is checked is filled with the card's colour and shows a tick. Today is outlined. Future days are dashed and cannot be checked.
 
 **Each card shows**
-- the category in a pill at the top right (long names are shortened with "…", and hovering shows the full name)
-- the habit title at the top left
+- the habit title at the top left (the whole title bar is the drag area, and the mouse pointer turns into a hand over it)
+- the category in a pill at the top right (long names are shortened with "…", and hovering shows the full name), followed by a pin button
 - three boxes at the bottom: Current streak, Longest, and Completion
+
+**Reordering and pinning.** Drag a card by its title bar (the pointer turns into a hand) to move it. Cards snap into place as you drag, and the new order is saved when you let go. With the keyboard, Tab to a card's title bar and press the arrow keys. The pin button at the right of the title bar pins a habit: pinned cards always appear first, in their own group, and the pin button toggles it off again. Cards can be moved within their own group (pinned or not); to move a card to the other group, pin or unpin it. The order is stored per month, so each month has its own arrangement. New habits are added at the end, and "Copy habits" keeps the order and pins of the source month. Dragging uses the browser's drag and drop, which works with a mouse or trackpad but not yet by touch on phones and tablets; the arrow keys work everywhere there is a keyboard.
 
 **Manage page.** Add a category (name and colour) and add a habit (title and category) for the month you have selected. A **Copy habits** panel copies habits between months (see below). In the table you can rename a habit, change its category, archive it (hide it from the month view, reversible) or delete it. Deleting or archiving a habit only affects the month it belongs to; the same habit in other months is untouched.
 
@@ -157,7 +160,7 @@ All tables are created by `db/schema.sql`.
 - **users**: id, email (unique), name, optional birthday, language (`en` or `fr`), created time.
 - **auth_identities**: one row per way a user can log in. Today that is `password`. It holds the password hash, whether the email is verified, and the verification token with its expiry. Keeping this separate from `users` is what makes it possible to add Google login later without changing the users table.
 - **categories**: belong to a user. A name (unique per user) and a colour.
-- **habits**: belong to a user, and to **one specific month** (year and month columns). Each habit has a title, an optional category and an archived flag. The same title can appear only once per user per month.
+- **habits**: belong to a user, and to **one specific month** (year and month columns). Each habit has a title, an optional category, an archived flag, a `pinned` flag and a `position` (its place in the card order). The same title can appear only once per user per month.
 - **check_ins**: one row per checked day, linked to a habit.
 - **session**: login sessions, managed by the session library.
 
@@ -253,7 +256,8 @@ All `/api/...` endpoints need a logged-in session and return JSON. `year` and `m
 |---|---|
 | `GET /api/habits?year=&month=` | The habits of a month with their checked days and statistics. Add `&archived=1` to include archived habits. |
 | `POST /api/habits` | Create a habit. Body: `title`, `categoryId`, `year`, `month`. Returns 409 if the title already exists that month. |
-| `PATCH /api/habits/:id` | Change a habit's `title`, `categoryId` or `archived`. |
+| `PATCH /api/habits/:id` | Change a habit's `title`, `categoryId`, `archived` or `pinned`. |
+| `PUT /api/habits/order` | Save the card order of a month. Body: `year`, `month`, `ids` (habit ids in display order). Habits are listed pinned first, then by this order. |
 | `DELETE /api/habits/:id` | Delete a habit (that month only). |
 | `PUT /api/habits/:id/check` | Check or uncheck a day. Body: `day` (`YYYY-MM-DD`) and `checked` (true or false). |
 | `POST /api/habits/copy` | Copy habits from any month to any other month. Body: `fromYear`, `fromMonth`, `toYear`, `toMonth`. Returns `copied` (new habits created) and `found` (habits in the source month). Returns 400 for an invalid or identical month. |
@@ -283,7 +287,7 @@ Every query is limited to the logged-in user's own data, so users cannot see eac
 
 - **Front-end changes** (anything in `public/`): save the file and refresh the browser (Cmd+Shift+R to bypass the cache). No rebuild is needed, because the folder is mounted into the container.
 - **Server changes** (anything in `src/`): rebuild and restart with `docker compose up -d --build`.
-- **Database changes:** `db/schema.sql` only runs when the database is first created. For a change on an existing database, run an `ALTER TABLE` statement manually, or (if you do not mind losing the data) reset with `docker compose down -v`. Before the app has real users it is fine to reset; once it has, use proper migrations.
+- **Database changes:** `db/schema.sql` only runs when the database is first created, so changes for a database that already exists go into `src/migrate.js`. It runs every time the server starts, and each statement uses `IF NOT EXISTS`, so it is safe to run repeatedly (this is how the `pinned` and `position` columns were added without touching existing data). For a change on an existing database, run an `ALTER TABLE` statement manually, or (if you do not mind losing the data) reset with `docker compose down -v`. Before the app has real users it is fine to reset; once it has, use proper migrations.
 - **Adding a language:** add a new dictionary in `i18n.js` and a button in the language switcher.
 
 ---
@@ -296,6 +300,7 @@ Go through this after significant changes.
 2. Logging in before verifying is refused.
 3. Create two categories, then create habits in them.
 4. Check and uncheck days. A card's streak and percentage update.
+   Drag a card to a new place and reload the page: the order is kept. Pin a card: it moves to the top and stays there after a reload. Unpin it again.
 5. Future days cannot be checked.
 6. Stop and restart with `docker compose down` then `up`. Everything is still there.
 7. Switch to a past month and back. Today returns to the current month.

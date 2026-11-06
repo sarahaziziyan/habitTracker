@@ -43,4 +43,6 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'server_error' });
 });
 
-app.listen(config.port, () => console.log('Habit Tracker on port ' + config.port));
+require('./migrate')()
+  .then(() => app.listen(config.port, () => console.log('Habit Tracker on port ' + config.port)))
+  .catch(err => { console.error('Database update failed', err); process.exit(1); });

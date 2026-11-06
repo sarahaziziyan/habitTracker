@@ -106,9 +106,12 @@ input[type="date"] { padding: 0 16px; }
   font-size: 18px; line-height: 24px; font-weight: 600;
   padding: var(--space-4) var(--space-6);
   background: var(--cat, var(--sage)); color: var(--cat-ink, var(--ink));
+  cursor: grab; touch-action: none;
 }
-.card-title > span:first-child { flex: 1 1 auto; min-width: 0; font-size: 18px; line-height: 24px; font-weight: 500; overflow-wrap: break-word; }
-.cat-tip { position: relative; flex: 0 1 auto; max-width: 45%; min-width: 0; }
+.card-title:active { cursor: grabbing; }
+.card-title:focus-visible { outline-offset: -4px; }
+.card-title .card-name { flex: 1 1 auto; min-width: min-content; font-size: 18px; line-height: 24px; font-weight: 500; overflow-wrap: break-word; }
+.cat-tip { position: relative; flex: 0 1 auto; max-width: 40%; min-width: 72px; }
 .cat-tip::after {
   content: attr(data-full); position: absolute; right: 0; top: calc(100% + var(--space-2)); z-index: 5;
   width: max-content; max-width: 240px; padding: var(--space-2) var(--space-3);
@@ -125,6 +128,11 @@ input[type="date"] { padding: 0 16px; }
   background: color-mix(in srgb, var(--cat-ink, var(--ink)) 18%, transparent);
   border: 2px solid var(--cat-ink, var(--ink));
 }
+.card-icon { cursor: pointer; flex: 0 0 auto; width: 32px; height: 32px; padding: 0; border-radius: 50%; background: transparent; color: inherit; }
+.card-icon:hover { background: color-mix(in srgb, var(--cat-ink, var(--ink)) 16%, transparent); }
+.card-icon svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.pin-btn.on svg { fill: currentColor; }
+.card-wrap.dragging { opacity: .4; }
 .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: var(--space-3) var(--space-4) var(--space-4); }
 .grid .wd { font-size: 12px; line-height: 16px; font-weight: 500; text-align: center; padding: var(--space-2) 0; color: var(--ink-muted); }
 .day {

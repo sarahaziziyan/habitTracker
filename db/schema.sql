@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS habits (
   year INT NOT NULL,
   month INT NOT NULL CHECK (month BETWEEN 1 AND 12),
   archived BOOLEAN NOT NULL DEFAULT false,
+  pinned BOOLEAN NOT NULL DEFAULT false,
+  position INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, year, month, title)
 );
